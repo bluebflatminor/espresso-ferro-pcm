@@ -1,0 +1,78 @@
+# Simulation 1 — Phase 1b: Ni diffusion barrier on SCD(111)
+# Quantum ESPRESSO neb.x input — climbing-image NEB
+#
+# Computes migration barrier for Ni adatom between adjacent
+# fcc hollow sites on H-terminated SCD(111) surface.
+# This barrier governs Ni island coarsening kinetics during RTA.
+#
+# To run (after completing relax calculation):
+#   mpirun -np 16 neb.x -inp ni_diffusion_neb.in | tee ni_diffusion_neb.out
+
+BEGIN
+BEGIN_PATH_INPUT
+&PATH
+  restart_mode    = 'from_scratch'
+  string_method   = 'neb'
+  nstep_path      = 100
+  ds              = 2.0
+  opt_scheme      = 'broyden'
+  num_of_images   = 7
+  k_max           = 0.3
+  k_min           = 0.2
+  CI_scheme       = 'auto'
+  path_thr        = 0.05
+/
+END_PATH_INPUT
+
+BEGIN_ENGINE_INPUT
+&CONTROL
+  calculation  = 'scf'
+  prefix       = 'ni_neb'
+  pseudo_dir   = 'PSEUDO_DIR'
+  outdir       = './tmp_neb/'
+/
+&SYSTEM
+  ibrav    = 0
+  nat      = 98
+  ntyp     = 3
+  ecutwfc  = 60.0
+  ecutrho  = 480.0
+  occupations = 'smearing'
+  smearing    = 'mv'
+  degauss     = 0.01
+  nspin       = 2
+  starting_magnetization(1) = 0.6
+/
+&ELECTRONS
+  conv_thr    = 1.0d-6
+  mixing_beta = 0.3
+/
+ATOMIC_SPECIES
+  Ni  58.693  Ni.upf
+  C   12.011  C.upf
+  H    1.008  H.upf
+K_POINTS automatic
+  4 4 1
+  0 0 0
+CELL_PARAMETERS angstrom
+  9.956  0.000  0.000
+  4.978  8.622  0.000
+  0.000  0.000 30.000
+END_ENGINE_INPUT
+
+BEGIN_IMAGES
+! Image 1: Ni at initial fcc hollow site
+BEGIN_IMAGE
+ATOMIC_POSITIONS angstrom
+! Paste final positions from ni_scd111_relax.out
+  Ni  0.830  0.479  16.50
+END_IMAGE
+! Images 2-6: interpolated automatically by NEB
+! Image 7: Ni at adjacent fcc hollow site
+BEGIN_IMAGE
+ATOMIC_POSITIONS angstrom
+! Ni displaced by one lattice vector
+  Ni  2.489  0.479  16.50
+END_IMAGE
+END_IMAGES
+END
