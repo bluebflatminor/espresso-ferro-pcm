@@ -1,0 +1,130 @@
+# Simulation 1 — Phase 2: Ni island dynamics on SCD(111) during RTA
+# LAMMPS input script — ReaxFF molecular dynamics
+#
+# Models Ni island coarsening and graphene nucleation on SCD(111)
+# during rapid thermal anneal at 850-1050 C.
+#
+# Required files:
+#   ffield.reax.NiCH  — ReaxFF parameter file for Ni/C/H
+#   scd111_slab.data  — LAMMPS data file for SCD(111) substrate
+#
+# To run:
+#   mpirun -np 32 lmp_mpi -in ni_rta_md.in -log ni_rta_md.log
+#
+# Sweep: change NI_DIAMETER in {5, 10, 20, 50} nm
+#        change RTA_TEMP in {1123, 1173, 1273, 1323} K
+
+# ── Initialisation ──────────────────────────────────────────────
+
+units          metal
+dimension      3
+boundary       p p f
+atom_style     charge
+
+variable       NI_DIAMETER    equal 10.0
+variable       RTA_TEMP       equal 1173
+variable       RAMP_RATE      equal 50
+variable       HOLD_TIME      equal 10000
+variable       SEED           equal 12345
+
+# ── Read structure ───────────────────────────────────────────────
+
+read_data      scd111_slab.data
+read_data      ni_island.data add append
+
+# ── Force field ──────────────────────────────────────────────────
+
+pair_style     reax/c NULL checkqeq yes
+pair_coeff     * * ffield.reax.NiCH Ni C H
+
+fix            qeq all qeq/reax 1 0.0 10.0 1.0e-6 reax/c
+
+# ── Define regions ───────────────────────────────────────────────
+
+region         bottom_fix block INF INF INF INF INF 2.0
+group          fixed_bottom region bottom_fix
+group          mobile subtract all fixed_bottom
+
+# ── Energy minimisation ──────────────────────────────────────────
+
+thermo         100
+thermo_style   custom step temp pe ke etotal press
+
+minimize       1.0e-6 1.0e-8 10000 100000
+
+# ── Stage 1: NVT equilibration at 300 K ─────────────────────────
+
+reset_timestep 0
+timestep       0.5
+
+velocity       mobile create 300.0 ${SEED} dist gaussian
+
+fix            nvt_eq mobile nvt temp 300.0 300.0 50.0
+fix            freeze fixed_bottom setforce 0.0 0.0 0.0
+
+thermo         1000
+thermo_style   custom step time temp pe ke etotal
+
+dump           eq mobile atom 5000 dump_equil.lammpstrj
+
+run            200000
+
+undump         eq
+unfix          nvt_eq
+
+# ── Stage 2: Ramp to RTA temperature ────────────────────────────
+
+variable       ramp_steps equal round((${RTA_TEMP}-300.0)/(${RAMP_RATE}*0.0005))
+
+fix            nvt_ramp mobile nvt temp 300.0 ${RTA_TEMP} 100.0
+
+dump           ramp mobile atom 10000 dump_ramp.lammpstrj
+dump_modify    ramp sort id
+
+run            ${ramp_steps}
+
+undump         ramp
+unfix          nvt_ramp
+
+# ── Stage 3: Isothermal hold at RTA temperature ──────────────────
+
+fix            nvt_hold mobile nvt temp ${RTA_TEMP} ${RTA_TEMP} 100.0
+
+dump           hold mobile atom 10000 dump_hold.lammpstrj
+dump_modify    hold sort id
+
+compute        coord_c all coord/atom cutoff 1.8 C
+fix            coord_ave all ave/atom 1 1000 1000 c_coord_c
+
+thermo         2000
+thermo_style   custom step time temp pe ke press
+
+run            ${HOLD_TIME}000
+
+undump         hold
+unfix          nvt_hold
+
+# ── Stage 4: Quench to 300 K ────────────────────────────────────
+
+variable       quench_steps equal round((${RTA_TEMP}-300.0)/(${RAMP_RATE}*0.0005))
+
+fix            nvt_quench mobile nvt temp ${RTA_TEMP} 300.0 100.0
+
+dump           quench mobile atom 10000 dump_quench.lammpstrj
+
+run            ${quench_steps}
+
+undump         quench
+unfix          nvt_quench
+
+# ── Final analysis dump ──────────────────────────────────────────
+
+dump           final all custom 1 final_structure.dump &
+               id type x y z c_coord_c f_coord_ave
+
+run            0
+
+# ── Post-processing notes ────────────────────────────────────────
+# 1. Graphene layer: C atoms with coord_c = 3 above slab surface
+# 2. Domain size: cluster analysis on sp2 C atoms (OVITO)
+# 3. Multilayer fraction: C atoms stacked within 3.4 Ang​​​​​​​​​​​​​​​​
