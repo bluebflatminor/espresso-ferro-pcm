@@ -1,0 +1,73 @@
+# Simulation 1 — Phase 1: Ni adsorption on H-terminated SCD(111)
+# Quantum ESPRESSO pw.x input — surface relaxation
+#
+# System: Ni adatom on 4x4 H-terminated SCD(111) slab
+# Functional: PBE-D3 (vdW dispersion correction via Grimme-D3)
+# Pseudopotentials: ONCV norm-conserving from PseudoDojo
+#   Ni: Ni.upf  (download from pseudo.dojo.org, stringent, scalar-relativistic)
+#   C:  C.upf
+#   H:  H.upf
+#
+# To run:
+#   mpirun -np 16 pw.x -in ni_scd111_relax.in | tee ni_scd111_relax.out
+#
+# Note: replace PSEUDO_DIR with your pseudopotential directory path
+
+&CONTROL
+  calculation   = 'relax'
+  restart_mode  = 'from_scratch'
+  prefix        = 'ni_scd111'
+  pseudo_dir    = 'PSEUDO_DIR'
+  outdir        = './tmp/'
+  tprnfor       = .true.
+  tstress       = .true.
+  forc_conv_thr = 1.0d-4
+/
+
+&SYSTEM
+  ibrav     = 0
+  nat       = 98
+  ntyp      = 3
+  ecutwfc   = 60.0
+  ecutrho   = 480.0
+  occupations = 'smearing'
+  smearing    = 'mv'
+  degauss     = 0.01
+  nspin       = 2
+  starting_magnetization(1) = 0.6
+/
+
+&ELECTRONS
+  conv_thr    = 1.0d-8
+  mixing_beta = 0.3
+  mixing_mode = 'local-TF'
+  electron_maxstep = 200
+/
+
+&IONS
+  ion_dynamics = 'bfgs'
+/
+
+ATOMIC_SPECIES
+  Ni  58.693  Ni.upf
+  C   12.011  C.upf
+  H    1.008  H.upf
+
+K_POINTS automatic
+  6 6 1
+  0 0 0
+
+CELL_PARAMETERS angstrom
+  9.956  0.000  0.000
+  4.978  8.622  0.000
+  0.000  0.000 30.000
+
+ATOMIC_POSITIONS angstrom
+! Generate full slab with ASE:
+!   from ase.build import surface, add_adsorbate
+!   slab = surface('diamond', (1,1,1), 6, vacuum=15)
+!   add_adsorbate(slab, 'Ni', 2.1, 'fcc')
+! Example positions (replace with ASE output):
+  C   0.000  0.000  14.20
+  C   1.659  0.958  14.20
+  Ni  0.830  0.479  16.50
