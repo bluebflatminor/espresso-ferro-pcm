@@ -1,0 +1,107 @@
+# Simulation 2 — Phase 1: Optical conductivity of graphene/Al2O3/Al:HfO2
+# Quantum ESPRESSO — two-step calculation
+#   Step 1: pw.x SCF ground state
+#   Step 2: epsilon.x optical response
+#
+# Computes Im[epsilon(omega)] and Re[sigma(omega)] at hbar*omega = 0.80 eV
+# (1550 nm) as a function of graphene carrier density n*.
+#
+# To run step 1:
+#   mpirun -np 32 pw.x -in graphene_hfo2_optical.in | tee scf.out
+# To run step 2:
+#   mpirun -np 32 epsilon.x -in graphene_hfo2_optical.in | tee epsilon.out
+#
+# Repeat for carrier densities: n* = 0, 1e11, 5e11, 1e12, 1.18e13 cm-2
+# Set via tot_charge — see note below
+
+# ════════════════════════════════════════════════════════════════
+# STEP 1: pw.x SCF
+# ════════════════════════════════════════════════════════════════
+
+&CONTROL
+  calculation   = 'scf'
+  prefix        = 'graphene_hfo2'
+  pseudo_dir    = 'PSEUDO_DIR'
+  outdir        = './tmp_optical/'
+  tprnfor       = .false.
+/
+
+&SYSTEM
+  ibrav     = 0
+  nat       = 52
+  ntyp      = 5
+  ecutwfc   = 70.0
+  ecutrho   = 560.0
+  occupations = 'smearing'
+  smearing    = 'fd'
+  degauss     = 0.005
+  !
+  ! Carrier density control:
+  ! n* = 1e12 cm-2 electron doping -> tot_charge = -0.16 e/supercell
+  ! n* = 1e11 cm-2                 -> tot_charge = -0.016
+  ! n* = 1.18e13 cm-2 (blocking)   -> tot_charge = -1.89
+  !
+  tot_charge  = 0.0
+/
+
+&ELECTRONS
+  conv_thr    = 1.0d-10
+  mixing_beta = 0.2
+  mixing_mode = 'plain'
+/
+
+ATOMIC_SPECIES
+  C    12.011  C.upf
+  O    15.999  O.upf
+  Al   26.982  Al.upf
+  Hf  178.490  Hf.upf
+  H    1.008   H.upf
+
+K_POINTS automatic
+  12 12 1
+  0  0  0
+
+CELL_PARAMETERS angstrom
+  9.840  0.000  0.000
+  4.920  8.522  0.000
+  0.000  0.000 40.000
+
+ATOMIC_POSITIONS angstrom
+! Generate full stack geometry with ASE or Pymatgen:
+!   graphene 4x4 at z = 20.0 Ang
+!   Al2O3 seed (1nm) below graphene
+!   Al:HfO2 (10nm) below Al2O3
+! Example graphene positions:
+  C    0.000  0.000  20.000
+  C    1.420  0.820  20.000
+! ... full stack — replace with ASE output
+
+
+# ════════════════════════════════════════════════════════════════
+# STEP 2: epsilon.x
+# Save this block as graphene_hfo2_epsilon.in
+# ════════════════════════════════════════════════════════════════
+
+&INPUTPP
+  prefix       = 'graphene_hfo2'
+  outdir       = './tmp_optical/'
+  calculation  = 'eps'
+/
+
+&ENERGY_GRID
+  smeartype    = 'gauss'
+  intersmear   = 0.05
+  intrasmear   = 0.01
+  wmin         = 0.0
+  wmax         = 3.0
+  nw           = 500
+/
+
+# Output files:
+#   graphene_hfo2.eps_re  — Re[epsilon(omega)]
+#   graphene_hfo2.eps_im  — Im[epsilon(omega)]
+#
+# Extract at hbar*omega = 0.80 eV for each n* value
+# Convert to sheet conductance:
+#   sigma = omega * eps_im * eps_0
+# Update SIGMA_TABLE in sim2_retention.py
